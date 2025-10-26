@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Bindicator Backend",
+      "type": "python",
+      "request": "launch",
+      "program": "backend/main.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Run Frontend (React)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/frontend/node_modules/react-scripts/bin/react-scripts.js",
+      "args": ["start"],
+      "cwd": "${workspaceFolder}/frontend"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "folders": [
+    { "path": "backend" },
+    { "path": "frontend" }
+  ],
+  "settings": {
+    "python.formatting.provider": "black"
+  }
+}
