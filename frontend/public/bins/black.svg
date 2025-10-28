@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 160" role="img" aria-label="Rubbish bin">
+  <defs>
+    <linearGradient id="kBody" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#303744"/>
+      <stop offset="1" stop-color="#151a22"/>
+    </linearGradient>
+    <linearGradient id="kLid" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#3c4350"/>
+      <stop offset="1" stop-color="#1b212b"/>
+    </linearGradient>
+    <filter id="shadowK" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity=".3"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadowK)">
+    <rect x="26" y="28" rx="8" width="76" height="106" fill="url(#kBody)"/>
+    <rect x="30" y="20" rx="6" width="68" height="16" fill="url(#kLid)"/>
+    <circle cx="42" cy="138" r="8" fill="#0a0f18"/>
+    <circle cx="86" cy="138" r="8" fill="#0a0f18"/>
+    <rect x="48" y="48" width="4" height="64" fill="#bcc1c8" opacity=".75"/>
+    <rect x="76" y="48" width="4" height="64" fill="#bcc1c8" opacity=".75"/>
+  </g>
+</svg>

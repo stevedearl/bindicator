@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 160" role="img" aria-label="Recycling bin">
+  <defs>
+    <linearGradient id="bBody" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#2f6fea"/>
+      <stop offset="1" stop-color="#1f4fd6"/>
+    </linearGradient>
+    <linearGradient id="bLid" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#3a7bff"/>
+      <stop offset="1" stop-color="#2456e0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="26" y="28" rx="8" width="76" height="106" fill="url(#bBody)"/>
+    <rect x="30" y="20" rx="6" width="68" height="16" fill="url(#bLid)"/>
+    <rect x="38" y="40" width="4" height="86" fill="#1a46b8" opacity=".25"/>
+    <rect x="86" y="40" width="4" height="86" fill="#1a46b8" opacity=".25"/>
+    <circle cx="42" cy="138" r="8" fill="#0f172a"/>
+    <circle cx="86" cy="138" r="8" fill="#0f172a"/>
+    <path d="M44 64l8 12h-6v12h-4V76h-6l8-12zm-14 24h40v4H30z" fill="#e8f1ff" opacity=".9"/>
+  </g>
+</svg>

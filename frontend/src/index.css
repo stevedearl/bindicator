@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  /* Soft radial gradient background */
+  background: radial-gradient(1200px 600px at 20% -10%, #eef3ff 0%, #f7fbff 40%, #f8fdfa 100%);
+  @apply text-gray-900;
+}
+
+.card {
+  @apply rounded-2xl bg-white shadow-lg ring-1 ring-black/5;
+}
+
+.pill {
+  @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm shadow-sm ring-1 ring-black/5 bg-white;
+}
+
+/* Dark mode */
+.dark body {
+  background: radial-gradient(100% 100% at 10% -10%, #0b1020 0%, #0a0f1a 45%, #0e1a13 100%);
+  @apply text-gray-100;
+}
+.dark .card {
+  @apply bg-gray-900/70 ring-white/10 shadow;
+}
+.dark .pill {
+  @apply bg-gray-800/80 ring-white/10 text-gray-100;
+}
+
+/* Elevated search bar tint */
+.search-bar {
+  @apply rounded-2xl bg-white/70 ring-1 ring-black/5 shadow-lg backdrop-blur;
+}
+.dark .search-bar {
+  @apply bg-gray-900/60 ring-white/10 shadow;
+}
+
+/* Big bin figure styles */
+.bin-plate {
+  @apply grid place-items-center rounded-full bg-white shadow-lg ring-1 ring-black/5;
+}
+.dark .bin-plate {
+  @apply bg-gray-800 ring-white/10 shadow;
+}
+
+/* Real bin image styling */
+.bin-img {
+  @apply drop-shadow-md;
+  transition: transform 220ms ease, filter 220ms ease;
+}
+.dark .bin-img {
+  /* Slight outline in dark mode to keep edges crisp */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)) drop-shadow(0 0 0.75px rgba(255,255,255,0.25));
+}
+
+@keyframes wiggle {
+  0% { transform: rotate(0deg) translateY(0); }
+  20% { transform: rotate(-2deg) translateY(-1px); }
+  40% { transform: rotate(2deg) translateY(0); }
+  60% { transform: rotate(-1.5deg) translateY(-1px); }
+  80% { transform: rotate(1.5deg) translateY(0); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+.bin-plate:hover .bin-img {
+  animation: wiggle 600ms ease-in-out both;
+}
+
+/* Loading dots */
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.6; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+.loading-dots span {
+  animation: dot-bounce 1.2s infinite ease-in-out;
+  display: inline-block;
+}
+.loading-dots span:nth-child(2) { animation-delay: .2s }
+.loading-dots span:nth-child(3) { animation-delay: .4s }

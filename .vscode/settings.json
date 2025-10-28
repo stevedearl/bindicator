@@ -4,5 +4,10 @@
   "python.defaultInterpreterPath": "venv/bin/python",
   "python.terminal.activateEnvironment": true,
   "chatgpt.defaultModel": "gpt-4",
-  "chatgpt.promptPrefix": "You are helping me build the Bindicator project."
+  "chatgpt.promptPrefix": "You are helping me build the Bindicator project.",
+  "codex.confirmEdits": false,
+  "openai.confirmEdits": false,
+  "openaiCodex.confirmEdits": false,
+  "codex.alwaysAllowWorkspaceEdits": true,
+  "openai.alwaysAllowWorkspaceEdits": true
 }
