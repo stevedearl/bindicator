@@ -26,9 +26,7 @@ Example:
 Notes
 -----
 - CORS is enabled for development so the frontend can call the API.
-- The /api/bins route returns dummy data for now.
 - Query param `refresh=true` forces a cache bypass and refresh.
-- In-memory cache TTL can be set via env var `BINDICATOR_CACHE_TTL_SECONDS` (default 21600 = 6 hours).
 - Response model (contract):
   {
     "postcode": string,
@@ -65,7 +63,7 @@ When using the RBWM datasource, the recommended flow is:
 
 Notes:
 - Bins are derived from the table on the UPRN page. We always return: ["blue", "black"] or ["blue", "green"] based on whether that date lists Refuse (black) or Garden (green).
-- Results are cached by key: `uprn:<uprn>` or `pc:<postcode>`.
+- Results are cached by key: `uprn:<uprn>` or by pretty postcode (e.g., `SL6 6AH`).
 
 Address resolution (house + postcode)
 -------------------------------------
@@ -100,18 +98,25 @@ Using the RBWM scraper (Playwright)
 
 Notes:
 - The scraper uses heuristic selectors and may require tweaking if the site HTML changes.
-- On scraper failure, the backend falls back to the mock source and logs a message.
+- In `rbwm` mode, upstream failures return HTTP 502 with a friendly JSON error; there is no silent mock fallback. To test without RBWM, set `BINDICATOR_DATASOURCE=mock`.
 
 Caching
 -------
 
-- Bindicator persists postcode lookups to a lightweight JSON cache on disk at `backend/data/cache.json`.
-- Each entry stores the full API response and a UTC `fetched_at` timestamp:
+- Bindicator persists lookups to a lightweight JSON cache on disk at `backend/data/cache.json`.
+- Keys:
+  - Postcode entries are stored by pretty postcode, e.g. `"SL6 6AH"`.
+  - UPRN entries are stored as `"uprn:100080366175"`.
+- Each entry stores the full API response and a UTC `fetched_at` timestamp. Example:
 
   {
     "SL6 6AH": {
       "data": { ... BinResponse JSON ... },
       "fetched_at": "2025-10-27T08:15:00Z"
+    },
+    "uprn:100080366175": {
+      "data": { ... BinResponse JSON ... },
+      "fetched_at": "2025-10-27T08:16:00Z"
     }
   }
 
@@ -135,6 +140,32 @@ Testing
 
 - After midnight UTC, on next app start the backend prefetches stale cached postcodes automatically.
 
+Hybrid Postcode Logic & Lazy Verification
+----------------------------------------
+
+- Bindicator auto-selects the first address for a postcode on the RBWM forms
+  site and parses that address’s schedule. Most postcodes share a single
+  schedule so this is fast and accurate.
+- Results are cached by postcode (persisted on disk) and refreshed once per
+  day by default.
+- Lazy verification is available on demand (never automatic per request):
+  it checks a handful of addresses under the postcode and compares bin
+  patterns to detect mixed routes.
+- If multiple routes exist, the cache stores a `mixed_routes=true` flag and
+  the list of addresses seen during verification; you can then fall back to
+  UPRN/address selection on the frontend.
+
+Debug endpoint (requires `BINDICATOR_DEBUG=true`)
+------------------------------------------------
+
+Run a verification, throttled to once per 24h per postcode:
+
+  curl "http://127.0.0.1:8000/api/debug/lazy-verify?postcode=SL6%206AH"
+
+Response includes `mixed_routes`, `checked_at`, and known `addresses` if
+inconsistent. The verification is polite: it checks at most a few addresses
+and includes small random waits between requests.
+
 Cache admin (dev convenience)
 -----------------------------
 
@@ -144,10 +175,11 @@ Cache admin (dev convenience)
 
 - Clear cache:
 
-  POST /api/cache/clear            # all entries
-  POST /api/cache/clear?scope=pc   # only postcode entries
-  POST /api/cache/clear?scope=uprn # only UPRN entries
-  POST /api/cache/clear?key=pc:SL66AH
+  POST /api/cache/clear              # all entries
+  POST /api/cache/clear?scope=pc     # postcode entries
+  POST /api/cache/clear?scope=uprn   # UPRN entries
+  POST /api/cache/clear?key=SL6%206AH  # specific postcode (also accepts `key=pc:SL6%206AH`)
+  POST /api/cache/clear?key=uprn:100080366175
 
 Deployment
 ----------

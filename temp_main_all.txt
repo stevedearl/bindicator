@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, HTTPException
+﻿from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import date, timedelta, datetime, timezone
 from pydantic import BaseModel, Field, ConfigDict
@@ -169,7 +169,7 @@ def scrape_rbwm_schedule(postcode: str) -> ScraperResult:
             # Run async Playwright scraper in this sync context
             return asyncio.run(_async_fetch(key))
         except Exception:
-            # In RBWM mode, do not fall back to mock — surface an upstream failure
+            # In RBWM mode, do not fall back to mock â€” surface an upstream failure
             log.exception("RBWM postcode scrape failed")
             raise
 
@@ -210,7 +210,7 @@ def get_bins(
     Returns next collection info.
     - If `uprn` is provided and datasource=rbwm, fetch by UPRN (preferred).
     - Else if `postcode` is provided, use rbwm/mock postcode flow.
-    Uses persistent disk cache (same-day). Set `refresh=true` to bypass.
+    Uses in-memory cache; set `refresh=true` to bypass.
     """
     if uprn:
         cache_key = f"uprn:{uprn}"

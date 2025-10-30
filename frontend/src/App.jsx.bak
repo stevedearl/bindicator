@@ -418,27 +418,15 @@ export default function App() {
               <button onClick={() => fetchBinsByUPRN(selected.uprn, { refresh: true })} className="rounded-lg bg-gray-800 px-3 py-1 text-xs font-medium text-white hover:bg-black">Refresh</button>
             )}
           </div>
-          {data.noCollections || !data.nextCollectionDate ? (
-            <div className="mb-4 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800/60 dark:text-gray-300 dark:ring-white/10">
-              {selected ? 'No collections found for this address.' : 'No collections found for this postcode.'}
-            </div>
-          ) : (
-            <>
-              <div className="mb-1 text-xl font-semibold tracking-tight">{formatDate(data.nextCollectionDate)}</div>
-              <div className="mb-4 text-sm text-emerald-700">{getMessage(data.bins)}</div>
-            </>
-          )}
+          <div className="mb-1 text-xl font-semibold tracking-tight">{formatDate(data.nextCollectionDate)}</div>
+          <div className="mb-4 text-sm text-emerald-700">{getMessage(data.bins)}</div>
 
-          {(data.bins && data.bins.length > 0) && (
-            <>
-              <div className="mb-2 text-sm text-gray-500">Bins</div>
-              <div className="flex flex-wrap items-start justify-start gap-5 sm:gap-7">
-                {data.bins?.map((b, i) => (
-                  <BinFigure key={b} color={b} label={binLabels[b] || b} delay={i * 0.06} />
-                ))}
-              </div>
-            </>
-          )}
+          <div className="mb-2 text-sm text-gray-500">Bins</div>
+          <div className="flex flex-wrap items-start justify-start gap-5 sm:gap-7">
+            {data.bins?.map((b, i) => (
+              <BinFigure key={b} color={b} label={binLabels[b] || b} delay={i * 0.06} />
+            ))}
+          </div>
 
           <div className="mt-4 text-xs text-gray-400">Source: {data.source} · Updated {formatTime(data.fetchedAt)}</div>
         </motion.div>

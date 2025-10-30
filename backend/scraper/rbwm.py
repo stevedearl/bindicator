@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from enum import Enum
 
@@ -13,7 +13,7 @@ class BinType(str, Enum):
 
 class ScraperResult(BaseModel):
     postcode: str
-    next_collection_date: date
+    next_collection_date: Optional[date]
     bins: list[BinType]
 
 
@@ -183,6 +183,100 @@ async def fetch_rbwm_schedule(postcode: str) -> ScraperResult:
             await browser.close()
 
 
+async def fetch_rbwm_schedule_autoselect(postcode: str) -> ScraperResult:
+    """
+    Auto-select the first address for a postcode on the RBWM forms site and
+    parse the schedule for that address. Intended for postcode-keyed caching.
+    """
+    from playwright.async_api import async_playwright
+    import logging as _logging
+
+    log = _logging.getLogger("bindicator.scraper")
+    normalized = postcode.strip().upper()
+    # Ensure a pretty postcode with a space before the inward code for endpoints
+    if " " in normalized:
+        pretty = " ".join(normalized.split())
+    else:
+        pretty = normalized[:-3] + " " + normalized[-3:] if len(normalized) > 3 else normalized
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        ctx = await browser.new_context()
+        page = await ctx.new_page()
+        try:
+            url = f"https://forms.rbwm.gov.uk/bincollections?postcode={pretty.replace(' ', '+')}&submit=Search+for+address"
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+            links = page.get_by_role("link", name="Select this address")
+            count = await links.count()
+            if count == 0:
+                links = page.locator("a:has-text('Select this address')")
+                count = await links.count()
+            if count == 0:
+                log.warning("[scraper] No addresses found for postcode %s", pretty)
+                raise RuntimeError("No addresses found for postcode")
+
+            first = links.nth(0)
+            try:
+                row = first.locator("xpath=ancestor::tr[1]")
+                addr = (await row.locator("td").first.inner_text()).strip()
+            except Exception:
+                addr = "(unknown address)"
+            log.info("[scraper] Auto-selecting first address for postcode %s: '%s'", pretty, addr)
+
+            href = await first.get_attribute("href")
+            if href:
+                if href.startswith("http"):
+                    await page.goto(href, wait_until="domcontentloaded", timeout=60000)
+                else:
+                    await page.goto("https://forms.rbwm.gov.uk" + href, wait_until="domcontentloaded", timeout=60000)
+            else:
+                await first.click()
+                await page.wait_for_load_state("domcontentloaded")
+
+            container = page.locator(".widget-bin-collections").first
+            await container.wait_for(timeout=60000)
+
+            rows = container.locator("table tbody tr")
+            rc = await rows.count()
+            services_by_date: Dict[date, List[str]] = {}
+
+            def _strip_ordinal(d: str) -> str:
+                import re as _re
+                return _re.sub(r"\b(\d{1,2})(st|nd|rd|th)\b", r"\1", d)
+
+            from datetime import datetime as _dt
+            for i in range(rc):
+                r = rows.nth(i)
+                cols = r.locator("td")
+                if await cols.count() < 2:
+                    continue
+                service = (await cols.nth(0).inner_text()).strip()
+                date_text = _strip_ordinal((await cols.nth(1).inner_text()).strip())
+                try:
+                    d = _dt.strptime(date_text, "%d %B %Y").date()
+                except Exception:
+                    continue
+                services_by_date.setdefault(d, []).append(service)
+
+            if not services_by_date:
+                txt = await container.inner_text()
+                if "no collections found" in txt.lower():
+                    return ScraperResult(postcode=pretty, next_collection_date=None, bins=[])
+                raise RuntimeError("No service dates found after selecting address")
+
+            today = date.today()
+            future_dates = sorted([d for d in services_by_date.keys() if d >= today])
+            target = future_dates[0] if future_dates else sorted(services_by_date.keys())[0]
+            services = services_by_date[target]
+            has_refuse = any("refuse" in s.lower() for s in services)
+            has_garden = any("garden" in s.lower() for s in services)
+            bins = [BinType.blue, (BinType.black if has_refuse else (BinType.green if has_garden else BinType.black))]
+
+            return ScraperResult(postcode=pretty, next_collection_date=target, bins=bins)
+        finally:
+            await ctx.close()
+            await browser.close()
 class RBWMAddress(BaseModel):
     uprn: str
     address: str
@@ -300,6 +394,10 @@ async def fetch_rbwm_schedule_by_uprn(uprn: str) -> ScraperResult:
                 services_by_date.setdefault(d, []).append(service)
 
             if not services_by_date:
+                # Check for explicit 'no collections found'
+                txt = await container.first.inner_text()
+                if "no collections found" in txt.lower():
+                    return ScraperResult(postcode="", next_collection_date=None, bins=[])
                 raise RuntimeError("No service dates found on UPRN page")
 
             today = date.today()
@@ -329,32 +427,46 @@ def fetch_rbwm_addresses_http(postcode: str) -> List[RBWMAddress]:
     import httpx
     from bs4 import BeautifulSoup
 
-    normalized = postcode.strip().upper().replace(" ", "+")
-    url = f"https://forms.rbwm.gov.uk/bincollections?postcode={normalized}&submit=Search+for+address"
+    pretty = postcode.strip().upper()
+    if " " not in pretty and len(pretty) > 3:
+        pretty = pretty[:-3] + " " + pretty[-3:]
+    url = f"https://forms.rbwm.gov.uk/bincollections?postcode={pretty.replace(' ', '+')}&submit=Search+for+address"
     headers = {"User-Agent": "Bindicator/0.1 (+https://github.com/)"}
     with httpx.Client(follow_redirects=True, timeout=20.0, headers=headers) as client:
         resp = client.get(url)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         results: List[RBWMAddress] = []
-        for a in soup.find_all("a"):
-            if not a.get_text(strip=True).lower().startswith("select this address"):
+        # Preferred: parse the address table rows
+        table_rows = soup.select("table tbody tr")
+        for row in table_rows:
+            cells = row.find_all("td")
+            if not cells:
                 continue
-            href = a.get("href") or ""
-            if "uprn=" not in href:
+            address_text = cells[0].get_text(" ", strip=True)
+            link = row.select_one('a[href*="uprn="]')
+            href = link.get("href") if link else ""
+            if not href or "uprn=" not in href:
                 continue
             uprn = href.split("uprn=")[-1].split("&")[0]
-            # Address text is typically in the same table row's first cell
-            address_text = ""
-            tr = a.find_parent("tr")
-            if tr:
-                tds = tr.find_all("td")
-                if tds:
-                    address_text = tds[0].get_text(" ", strip=True)
-            if not address_text and a.parent:
-                address_text = a.parent.get_text(" ", strip=True)
-                address_text = address_text.replace("Select this address", "").strip()
             results.append(RBWMAddress(uprn=uprn, address=address_text or uprn))
+
+        # Fallback: scan all anchors if table parsing found nothing
+        if not results:
+            for a in soup.find_all("a"):
+                href = a.get("href") or ""
+                if "uprn=" not in href:
+                    continue
+                uprn = href.split("uprn=")[-1].split("&")[0]
+                tr = a.find_parent("tr")
+                address_text = ""
+                if tr:
+                    tds = tr.find_all("td")
+                    if tds:
+                        address_text = tds[0].get_text(" ", strip=True)
+                if not address_text:
+                    address_text = (a.get_text(" ", strip=True) or "").replace("Select this address", "").strip()
+                results.append(RBWMAddress(uprn=uprn, address=address_text or uprn))
         return results
 
 
@@ -391,6 +503,9 @@ def fetch_rbwm_schedule_by_uprn_http(uprn: str) -> ScraperResult:
             services_by_date.setdefault(d, []).append(service)
 
         if not services_by_date:
+            txt = widget.get_text(" ", strip=True).lower()
+            if "no collections found" in txt:
+                return ScraperResult(postcode="", next_collection_date=None, bins=[])
             raise RuntimeError("No service dates found in RBWM table")
 
         today = date.today()
@@ -407,3 +522,52 @@ def fetch_rbwm_schedule_by_uprn_http(uprn: str) -> ScraperResult:
         m = _re.search(r"\b([A-Z]{1,2}\d{1,2}[A-Z]?)\s*(\d[ABD-HJLN-UW-Z]{2})\b", text)
         postcode = (m.group(0) if m else "").upper()
         return ScraperResult(postcode=postcode, next_collection_date=target, bins=bins)
+
+
+async def verify_postcode_consistency(postcode: str, limit: int = 5) -> Dict[str, Any]:
+    """Check multiple addresses under a postcode and compare bin patterns.
+    Returns a structured dict with consistency info.
+    Polite behaviour: random small waits between checks.
+    """
+    import random
+    import asyncio
+    import logging as _logging
+
+    log = _logging.getLogger("bindicator.scraper")
+    normalized = postcode.strip().upper()
+
+    # Use Playwright list to get UPRNs
+    addrs = await fetch_rbwm_addresses(normalized)
+    if not addrs:
+        log.warning("[scraper] verification: no addresses for %s", normalized)
+        raise RuntimeError("No addresses found for postcode")
+
+    checked = 0
+    patterns: Dict[str, List[str]] = {}
+    for item in addrs[: max(1, min(limit, len(addrs)) )]:
+        try:
+            # Polite, small random delay
+            await asyncio.sleep(random.uniform(1.0, 2.5))
+            r = await fetch_rbwm_schedule_by_uprn(item.uprn)
+            bins = [b.value if isinstance(b, BinType) else str(b) for b in r.bins]
+            # Normalize order: blue is always included, keep other stable order
+            patterns[item.address] = bins
+            checked += 1
+        except Exception:
+            log.exception("[scraper] verification failed for %s (%s)", item.address, item.uprn)
+
+    unique_sets = {tuple(p) for p in patterns.values()}
+    consistent = len(unique_sets) <= 1
+    if consistent:
+        log.info("[scraper] Verified postcode %s — consistent ✅", normalized)
+        differences: Dict[str, List[str]] = {}
+    else:
+        log.warning("[scraper] Postcode %s has mixed routes ⚠️ — multiple patterns detected.", normalized)
+        differences = patterns
+
+    return {
+        "postcode": normalized,
+        "addresses_checked": checked,
+        "consistent": consistent,
+        "differences": differences,
+    }
